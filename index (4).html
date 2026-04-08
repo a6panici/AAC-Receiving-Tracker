@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AAC · Receiving & Quality Tracker</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Georgia',serif;background:#f4f2ee;color:#1a1a1a;font-size:14px;min-height:100vh}
+a{color:inherit}
+.app{max-width:1200px;margin:0 auto;padding:0 0 4rem}
+.header{background:#1a2332;color:#fff;padding:1rem 1.5rem;display:flex;align-items:center;justify-content:space-between}
+.header h1{font-size:15px;font-weight:400;letter-spacing:.08em;font-family:monospace;text-transform:uppercase}
+.header .brands{display:flex;gap:8px;align-items:center}
+.badge{font-size:11px;font-weight:600;padding:3px 9px;border-radius:3px;font-family:monospace;letter-spacing:.06em}
+.badge.aac{background:#c8861a;color:#fff}
+.badge.dg{background:#3a5a8a;color:#fff}
+.tabs{display:flex;gap:0;border-bottom:1px solid #d4d0c8;padding:0 1.5rem;background:#fff;overflow-x:auto}
+.tab{padding:.75rem 1.1rem;font-size:12px;cursor:pointer;border-bottom:2px solid transparent;color:#666;font-family:monospace;letter-spacing:.04em;white-space:nowrap;user-select:none}
+.tab.active{border-bottom-color:#c8861a;color:#1a1a1a;font-weight:600}
+.tab:hover:not(.active){color:#1a1a1a}
+.content{padding:1.5rem}
+.loading{text-align:center;padding:3rem;font-family:monospace;font-size:13px;color:#888}
+.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:1.5rem}
+@media(max-width:700px){.cards{grid-template-columns:1fr 1fr}}
+.card{background:#fff;border:0.5px solid #ddd;border-radius:6px;padding:.875rem 1rem}
+.card .label{font-size:10px;color:#888;font-family:monospace;letter-spacing:.07em;text-transform:uppercase;margin-bottom:4px}
+.card .val{font-size:22px;font-weight:500;font-family:monospace}
+.card .sub{font-size:11px;color:#888;margin-top:2px;font-family:monospace}
+.card.warn .val{color:#c8861a}
+.card.danger .val{color:#c0392b}
+.card.good .val{color:#1e7e4a}
+.section-title{font-size:10px;font-family:monospace;letter-spacing:.09em;text-transform:uppercase;color:#888;margin-bottom:.75rem;margin-top:1.25rem}
+.section-title:first-child{margin-top:0}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+.form-grid.three{grid-template-columns:1fr 1fr 1fr}
+@media(max-width:600px){.form-grid,.form-grid.three{grid-template-columns:1fr}}
+.field{display:flex;flex-direction:column;gap:4px}
+.field label{font-size:10px;font-family:monospace;letter-spacing:.07em;text-transform:uppercase;color:#666}
+.field input,.field select,.field textarea{font-size:13px;font-family:monospace;background:#fff;border:0.5px solid #ccc;border-radius:5px;padding:7px 10px;color:#1a1a1a;width:100%;outline:none}
+.field input:focus,.field select:focus,.field textarea:focus{border-color:#c8861a}
+.field textarea{min-height:80px;resize:vertical}
+.field input[type=number]{text-align:right}
+hr.divider{border:none;border-top:0.5px solid #e8e4dc;margin:1.25rem 0}
+.btn{font-family:monospace;font-size:12px;letter-spacing:.04em;padding:7px 16px;border-radius:5px;cursor:pointer;border:0.5px solid #ccc;background:#f4f2ee;color:#1a1a1a}
+.btn:hover{background:#e8e4dc}
+.btn.primary{background:#1a2332;color:#fff;border-color:#1a2332}
+.btn.primary:hover{background:#243044}
+.btn.amber{background:#c8861a;color:#fff;border-color:#c8861a}
+.btn.amber:hover{background:#b07616}
+.btn.danger{background:#c0392b;color:#fff;border-color:#c0392b}
+.btn.danger:hover{background:#a93226}
+.btn.sm{padding:4px 10px;font-size:11px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.table-wrap{overflow-x:auto;border:0.5px solid #ddd;border-radius:6px}
+table{width:100%;border-collapse:collapse;font-size:12px;font-family:monospace}
+th{background:#f4f2ee;padding:8px 10px;text-align:left;font-size:10px;letter-spacing:.07em;text-transform:uppercase;color:#666;font-weight:600;border-bottom:0.5px solid #ddd;white-space:nowrap}
+td{padding:7px 10px;border-bottom:0.5px solid #eee;color:#1a1a1a;vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:#faf9f6}
+.pill{display:inline-block;font-size:10px;font-family:monospace;letter-spacing:.04em;padding:2px 7px;border-radius:3px;font-weight:600}
+.pill.aac{background:#fdf0dc;color:#7a4f00}
+.pill.dg{background:#dbe8f5;color:#1a3a5c}
+.pill.open{background:#fdecea;color:#8b2020}
+.pill.closed{background:#e0f4ea;color:#145a2e}
+.pill.inprogress{background:#fff3dc;color:#7a4f00}
+.filters{display:flex;gap:8px;margin-bottom:1rem;flex-wrap:wrap;align-items:center}
+.filters input,.filters select{font-size:12px;font-family:monospace;padding:6px 9px;border:0.5px solid #ccc;border-radius:5px;background:#fff;color:#1a1a1a;outline:none}
+.vendor-block{border:0.5px solid #ddd;border-radius:6px;margin-bottom:1rem;overflow:hidden}
+.vendor-header{background:#f4f2ee;padding:.875rem 1rem;display:flex;align-items:flex-start;justify-content:space-between;cursor:pointer;gap:1rem}
+.vendor-header:hover{background:#ece9e2}
+.vendor-name{font-weight:600;font-size:14px;font-family:monospace;margin-bottom:4px}
+.vendor-stats{display:flex;gap:14px;flex-wrap:wrap;font-size:11px;font-family:monospace;color:#666}
+.vendor-stats span b{color:#1a1a1a}
+.expand-icon{font-size:11px;color:#888;flex-shrink:0;padding-top:2px}
+.issue-checks{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:1rem}
+.issue-check{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-family:monospace;background:#f4f2ee;border:0.5px solid #ccc;border-radius:4px;padding:5px 10px;cursor:pointer;user-select:none}
+.issue-check.selected{background:#fdf0dc;border-color:#c8861a;color:#7a4f00}
+.size-rows{display:flex;flex-direction:column;gap:6px;margin-bottom:.75rem}
+.size-row{display:grid;grid-template-columns:1fr 1fr 80px 28px;gap:6px;align-items:center}
+.size-row input{font-size:12px;font-family:monospace;padding:5px 8px;border:0.5px solid #ccc;border-radius:4px;background:#fff;color:#1a1a1a;outline:none}
+.notice{background:#fdf0dc;border:0.5px solid #c8861a;border-radius:6px;padding:.75rem 1rem;font-size:12px;font-family:monospace;color:#7a4f00;margin-bottom:1.25rem}
+.error-box{background:#fdecea;border:0.5px solid #c0392b;border-radius:6px;padding:.75rem 1rem;font-size:12px;font-family:monospace;color:#8b2020;margin-bottom:1rem}
+.success-box{background:#e0f4ea;border:0.5px solid #1e7e4a;border-radius:6px;padding:.75rem 1rem;font-size:12px;font-family:monospace;color:#145a2e;margin-bottom:1rem}
+.export-section{background:#fff;border:0.5px solid #ddd;border-radius:6px;padding:1.25rem;margin-bottom:1rem}
+.export-section h3{font-size:10px;font-family:monospace;letter-spacing:.09em;text-transform:uppercase;color:#888;margin-bottom:.75rem}
+.row-gap{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.empty{padding:2.5rem;text-align:center;color:#888;font-size:13px;font-family:monospace}
+.vcards{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;padding:1rem;border-bottom:0.5px solid #eee}
+@media(max-width:700px){.vcards{grid-template-columns:1fr 1fr}}
+.vcard{background:#f4f2ee;border-radius:5px;padding:.75rem}
+.vcard .label{font-size:10px;color:#888;font-family:monospace;text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px}
+.vcard .val{font-size:18px;font-weight:500;font-family:monospace}
+.red{color:#c0392b}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="header">
+    <h1>Receiving &amp; Quality Tracker</h1>
+    <div class="brands">
+      <span class="badge aac">AAC</span>
+      <span class="badge dg">DG</span>
+    </div>
+  </div>
+  <div class="tabs" id="tabs">
+    <div class="tab active" data-tab="dashboard">Dashboard</div>
+    <div class="tab" data-tab="entry">+ New Entry</div>
+    <div class="tab" data-tab="log">Transaction Log</div>
+    <div class="tab" data-tab="vendors">Vendor Reports</div>
+    <div class="tab" data-tab="export">NetSuite Export</div>
+  </div>
+  <div class="content" id="content"><div class="loading">Loading records from Airtable...</div></div>
+</div>
+
+<script>
+const BASE_ID = 'appweZ43qXTHSrZvp';
+const TABLE_ID = 'tblMS0dIbZloUQlm9';
+const TOKEN = 'pat53mryRbahq3Ali';
+const API = `https://api.airtable.com/v0/${BASE_ID}/${TABLE_ID}`;
+const HEADERS = {'Authorization':`Bearer ${TOKEN}`,'Content-Type':'application/json'};
+
+const ISSUE_TYPES = ['Sizing — Waist Off','Sizing — Length Off','Sizing — Both Off','Sewing Defect','Fabric Defect','Missing Tags','Wrong Label / SKU','Wrong Color','Wrong Style','Overshipment','Undershipment','No Joker Tags','Other'];
+
+let records = [];
+let activeTab = 'dashboard';
+let expanded = {};
+let logFilter = {brand:'',vendor:'',po:'',status:''};
+let msg = {type:'',text:''};
+let saving = false;
+
+let entryState = freshEntry();
+function freshEntry(){
+  return {brand:'AAC',vendor:'',po_number:'',cut_number:'',style:'',date_received:today(),
+    units_ordered:'',units_received:'',units_correct:'',units_fabric_defect:'',
+    units_sewing_defect:'',units_retagged:'',units_seconds:'',
+    issue_types:[],size_issues:[],notes:'',status:'Open'};
+}
+function today(){return new Date().toISOString().slice(0,10);}
+
+async function loadRecords(){
+  records = [];
+  let offset = '';
+  try{
+    do{
+      const url = API + '?pageSize=100' + (offset?`&offset=${offset}`:'') + '&sort[0][field]=Date+Received&sort[0][direction]=desc';
+      const res = await fetch(url,{headers:HEADERS});
+      if(!res.ok) throw new Error('Airtable error: '+res.status);
+      const data = await res.json();
+      records = records.concat(data.records||[]);
+      offset = data.offset||'';
+    }while(offset);
+  }catch(e){
+    setMsg('error','Could not load records from Airtable: '+e.message);
+  }
+  render();
+}
+
+async function saveRecord(fields){
+  const res = await fetch(API,{method:'POST',headers:HEADERS,body:JSON.stringify({records:[{fields}]})});
+  if(!res.ok){const d=await res.json();throw new Error(d.error?.message||'Save failed');}
+  return res.json();
+}
+
+async function updateRecord(id,fields){
+  const res = await fetch(`${API}/${id}`,{method:'PATCH',headers:HEADERS,body:JSON.stringify({fields})});
+  if(!res.ok){const d=await res.json();throw new Error(d.error?.message||'Update failed');}
+  return res.json();
+}
+
+async function deleteRecord(id){
+  const res = await fetch(`${API}/${id}`,{method:'DELETE',headers:HEADERS});
+  if(!res.ok) throw new Error('Delete failed');
+}
+
+function f(r,k){return r.fields?.[k]??'';}
+function fmt(n){return (+n||0).toLocaleString();}
+function fmtDate(d){if(!d)return '—';return new Date(d+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});}
+function defectRate(r){
+  const recv = +f(r,'Units Received')||0;
+  if(!recv) return '—';
+  const bad = (+f(r,'Fabric Defects')||0)+(+f(r,'Sewing Defects')||0);
+  return ((bad/recv)*100).toFixed(1)+'%';
+}
+function setMsg(type,text){msg={type,text};render();}
+function clearMsg(){msg={type:'',text:''};}
+
+function render(){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===activeTab));
+  const c = document.getElementById('content');
+  if(activeTab==='dashboard') c.innerHTML=renderDashboard();
+  else if(activeTab==='entry') c.innerHTML=renderEntry();
+  else if(activeTab==='log') c.innerHTML=renderLog();
+  else if(activeTab==='vendors') c.innerHTML=renderVendors();
+  else if(activeTab==='export') c.innerHTML=renderExport();
+  bindEvents();
+}
+
+function msgBanner(){
+  if(!msg.text) return '';
+  if(msg.type==='error') return `<div class="error-box">${msg.text}</div>`;
+  if(msg.type==='success') return `<div class="success-box">${msg.text}</div>`;
+  return '';
+}
+
+function renderDashboard(){
+  const total = records.length;
+  const totalUnits = records.reduce((a,r)=>a+(+f(r,'Units Received')||0),0);
+  const open = records.filter(r=>f(r,'Status')==='Open').length;
+  const vendors = new Set(records.map(r=>f(r,'Vendor')).filter(Boolean)).size;
+
+  const vm = {};
+  records.forEach(r=>{
+    const v = f(r,'Vendor')||'Unknown';
+    if(!vm[v]) vm[v]={pos:new Set(),units:0,defects:0,flags:0};
+    vm[v].pos.add(f(r,'PO Number'));
+    vm[v].units += +f(r,'Units Received')||0;
+    vm[v].defects += (+f(r,'Fabric Defects')||0)+(+f(r,'Sewing Defects')||0);
+    vm[v].flags += (f(r,'Issue Flags')||'').split(';').filter(x=>x.trim()).length;
+  });
+
+  const vRows = Object.entries(vm).map(([name,v])=>`
+    <tr>
+      <td>${name}</td>
+      <td>${v.pos.size}</td>
+      <td>${fmt(v.units)}</td>
+      <td class="${v.defects>0?'red':''}">${fmt(v.defects)}</td>
+      <td>${v.units?((v.defects/v.units)*100).toFixed(1)+'%':'—'}</td>
+      <td>${v.flags}</td>
+    </tr>`).join('');
+
+  return `${msgBanner()}
+    <div class="cards">
+      <div class="card"><div class="label">POs Logged</div><div class="val">${total}</div><div class="sub">total transactions</div></div>
+      <div class="card"><div class="label">Units Received</div><div class="val">${fmt(totalUnits)}</div></div>
+      <div class="card warn"><div class="label">Open Issues</div><div class="val">${open}</div><div class="sub">need resolution</div></div>
+      <div class="card"><div class="label">Active Vendors</div><div class="val">${vendors}</div></div>
+    </div>
+    <div class="section-title">Vendor Overview</div>
+    ${total===0?`<div class="empty">No records yet — use New Entry to log your first receiving record.</div>`:`
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Vendor</th><th>POs</th><th>Units Recv'd</th><th>Defects</th><th>Defect Rate</th><th>Issue Flags</th></tr></thead>
+        <tbody>${vRows}</tbody>
+      </table>
+    </div>`}`;
+}
+
+function renderEntry(){
+  const e = entryState;
+  const issueChecks = ISSUE_TYPES.map(t=>`
+    <span class="issue-check${e.issue_types.includes(t)?' selected':''}" data-issue="${t}">${t}</span>`).join('');
+
+  const sizeRows = (e.size_issues||[]).map((r,i)=>`
+    <div class="size-row">
+      <input placeholder="From (e.g. 34x32)" value="${r.from||''}" data-si="${i}" data-key="from">
+      <input placeholder="To (actual)" value="${r.to||''}" data-si="${i}" data-key="to">
+      <input type="number" placeholder="Qty" value="${r.qty||''}" data-si="${i}" data-key="qty" style="text-align:right">
+      <button class="btn sm danger" data-rmsi="${i}">×</button>
+    </div>`).join('');
+
+  return `${msgBanner()}
+    <div class="notice">Fill in PO, Cut, Style, and Vendor at minimum. This record becomes the source for NetSuite receiving.</div>
+    <div class="section-title">PO & Cut Information</div>
+    <div class="form-grid three" style="margin-bottom:1rem">
+      <div class="field"><label>Brand *</label>
+        <select id="e-brand">
+          <option ${e.brand==='AAC'?'selected':''}>AAC</option>
+          <option ${e.brand==='DG'?'selected':''}>DG</option>
+        </select></div>
+      <div class="field"><label>Vendor *</label><input id="e-vendor" value="${e.vendor}" placeholder="Vendor name"></div>
+      <div class="field"><label>PO # *</label><input id="e-po" value="${e.po_number}" placeholder="e.g. 14515"></div>
+      <div class="field"><label>Cut # *</label><input id="e-cut" value="${e.cut_number}" placeholder="e.g. C-2241"></div>
+      <div class="field"><label>Style *</label><input id="e-style" value="${e.style}" placeholder="e.g. DB202"></div>
+      <div class="field"><label>Date Received</label><input type="date" id="e-date" value="${e.date_received}"></div>
+    </div>
+    <hr class="divider">
+    <div class="section-title">Quantity Breakdown</div>
+    <div class="form-grid" style="margin-bottom:1rem">
+      <div class="field"><label>PO Ordered QTY</label><input type="number" id="e-ordered" value="${e.units_ordered}"></div>
+      <div class="field"><label>Packing Slip / Received QTY</label><input type="number" id="e-received" value="${e.units_received}"></div>
+      <div class="field"><label>Received Correctly (Ecom-ready)</label><input type="number" id="e-correct" value="${e.units_correct}"></div>
+      <div class="field"><label>Fabric Defects</label><input type="number" id="e-fabric" value="${e.units_fabric_defect}"></div>
+      <div class="field"><label>Sewing Defects</label><input type="number" id="e-sewing" value="${e.units_sewing_defect}"></div>
+      <div class="field"><label>Retagged QTY</label><input type="number" id="e-retagged" value="${e.units_retagged}"></div>
+      <div class="field"><label>Seconds / Defect SKU QTY</label><input type="number" id="e-seconds" value="${e.units_seconds}"></div>
+    </div>
+    <hr class="divider">
+    <div class="section-title">Issue Flags (select all that apply)</div>
+    <div class="issue-checks">${issueChecks}</div>
+    <hr class="divider">
+    <div class="section-title">Size Mismatches / Retag Log</div>
+    <p style="font-size:11px;color:#888;font-family:monospace;margin-bottom:.75rem">Log each size labeled incorrectly — what it said vs. what it actually measured.</p>
+    <div class="size-rows" id="size-rows">${sizeRows}</div>
+    <button class="btn sm" id="add-si" style="margin-bottom:1rem">+ Add Size Mismatch</button>
+    <hr class="divider">
+    <div class="section-title">Notes</div>
+    <div class="field" style="margin-bottom:1.25rem"><textarea id="e-notes" placeholder="Any additional notes about this cut or PO...">${e.notes}</textarea></div>
+    <div class="field" style="margin-bottom:1.25rem;max-width:200px"><label>Status</label>
+      <select id="e-status">
+        <option ${e.status==='Open'?'selected':''}>Open</option>
+        <option ${e.status==='In Progress'?'selected':''}>In Progress</option>
+        <option ${e.status==='Closed'?'selected':''}>Closed</option>
+      </select></div>
+    <div class="row-gap">
+      <button class="btn primary" id="submit-entry" ${saving?'disabled':''}>
+        ${saving?'Saving...':'Save Receiving Record'}
+      </button>
+      <button class="btn" id="clear-entry">Clear Form</button>
+    </div>`;
+}
+
+function renderLog(){
+  const vendorOpts = [...new Set(records.map(r=>f(r,'Vendor')).filter(Boolean))].sort().map(v=>`<option value="${v}">${v}</option>`).join('');
+  let rows = records.filter(r=>{
+    if(logFilter.brand && f(r,'Brand')!==logFilter.brand) return false;
+    if(logFilter.vendor && f(r,'Vendor')!==logFilter.vendor) return false;
+    if(logFilter.po && !(f(r,'PO Number')||'').toLowerCase().includes(logFilter.po.toLowerCase())) return false;
+    if(logFilter.status && f(r,'Status')!==logFilter.status) return false;
+    return true;
+  });
+
+  const tableRows = rows.map(r=>`
+    <tr>
+      <td><span class="pill ${(f(r,'Brand')||'aac').toLowerCase()}">${f(r,'Brand')||'—'}</span></td>
+      <td>${f(r,'Vendor')||'—'}</td>
+      <td>${f(r,'PO Number')||'—'}</td>
+      <td>${f(r,'Cut Number')||'—'}</td>
+      <td>${f(r,'Style')||'—'}</td>
+      <td>${fmtDate(f(r,'Date Received'))}</td>
+      <td style="text-align:right">${fmt(f(r,'Units Ordered'))}</td>
+      <td style="text-align:right">${fmt(f(r,'Units Received'))}</td>
+      <td style="text-align:right${((+f(r,'Fabric Defects')||0)+(+f(r,'Sewing Defects')||0))>0?';color:#c0392b':''}">${fmt((+f(r,'Fabric Defects')||0)+(+f(r,'Sewing Defects')||0))}</td>
+      <td>${defectRate(r)}</td>
+      <td>${f(r,'Issue Flags')?`<span class="pill open">${(f(r,'Issue Flags')||'').split(';').filter(x=>x.trim()).length} flag(s)</span>`:'—'}</td>
+      <td><span class="pill ${f(r,'Status')==='Open'?'open':f(r,'Status')==='Closed'?'closed':'inprogress'}">${f(r,'Status')||'Open'}</span></td>
+      <td>
+        <button class="btn sm" data-edit="${r.id}">Edit</button>
+        <button class="btn sm danger" data-del="${r.id}" style="margin-left:4px">Del</button>
+      </td>
+    </tr>`).join('');
+
+  return `${msgBanner()}
+    <div class="filters">
+      <select id="lf-brand"><option value="">All Brands</option><option value="AAC" ${logFilter.brand==='AAC'?'selected':''}>AAC</option><option value="DG" ${logFilter.brand==='DG'?'selected':''}>DG</option></select>
+      <select id="lf-vendor"><option value="">All Vendors</option>${vendorOpts}</select>
+      <input id="lf-po" placeholder="Search PO #..." value="${logFilter.po}" style="width:140px">
+      <select id="lf-status"><option value="">All Statuses</option><option value="Open" ${logFilter.status==='Open'?'selected':''}>Open</option><option value="In Progress" ${logFilter.status==='In Progress'?'selected':''}>In Progress</option><option value="Closed" ${logFilter.status==='Closed'?'selected':''}>Closed</option></select>
+      <span style="font-family:monospace;font-size:11px;color:#888">${rows.length} record${rows.length!==1?'s':''}</span>
+      <button class="btn sm amber" id="refresh-btn" style="margin-left:auto">↻ Refresh</button>
+    </div>
+    ${rows.length===0?`<div class="empty">No records match the current filters.</div>`:`
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Brand</th><th>Vendor</th><th>PO #</th><th>Cut #</th><th>Style</th><th>Date Recv'd</th><th>Ordered</th><th>Received</th><th>Defects</th><th>Defect %</th><th>Issues</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody>${tableRows}</tbody>
+      </table>
+    </div>`}`;
+}
+
+function renderVendors(){
+  const vm = {};
+  records.forEach(r=>{
+    const v = f(r,'Vendor')||'Unknown';
+    if(!vm[v]) vm[v]={records:[],pos:new Set(),cuts:new Set()};
+    vm[v].records.push(r);
+    vm[v].pos.add(f(r,'PO Number'));
+    vm[v].cuts.add(f(r,'Cut Number'));
+  });
+
+  if(!Object.keys(vm).length) return `${msgBanner()}<div class="empty">No records yet.</div>`;
+
+  return msgBanner() + Object.entries(vm).map(([name,v])=>{
+    const ordered = v.records.reduce((a,r)=>a+(+f(r,'Units Ordered')||0),0);
+    const received = v.records.reduce((a,r)=>a+(+f(r,'Units Received')||0),0);
+    const defects = v.records.reduce((a,r)=>a+(+f(r,'Fabric Defects')||0)+(+f(r,'Sewing Defects')||0),0);
+    const retagged = v.records.reduce((a,r)=>a+(+f(r,'Retagged')||0),0);
+    const dr = received?((defects/received)*100).toFixed(1)+'%':'—';
+    const allFlags = v.records.flatMap(r=>(f(r,'Issue Flags')||'').split(';').map(x=>x.trim()).filter(Boolean));
+    const fc = {};
+    allFlags.forEach(i=>{fc[i]=(fc[i]||0)+1;});
+    const topFlags = Object.entries(fc).sort((a,b)=>b[1]-a[1]).slice(0,4);
+    const isOpen = expanded[name];
+
+    const detailRows = v.records.map(r=>`
+      <tr>
+        <td><span class="pill ${(f(r,'Brand')||'aac').toLowerCase()}">${f(r,'Brand')}</span></td>
+        <td>${f(r,'PO Number')||'—'}</td>
+        <td>${f(r,'Cut Number')||'—'}</td>
+        <td>${f(r,'Style')||'—'}</td>
+        <td>${fmtDate(f(r,'Date Received'))}</td>
+        <td style="text-align:right">${fmt(f(r,'Units Ordered'))}</td>
+        <td style="text-align:right">${fmt(f(r,'Units Received'))}</td>
+        <td style="text-align:right${((+f(r,'Fabric Defects')||0)+(+f(r,'Sewing Defects')||0))>0?';color:#c0392b':''}">${fmt((+f(r,'Fabric Defects')||0)+(+f(r,'Sewing Defects')||0))}</td>
+        <td style="text-align:right">${fmt(f(r,'Retagged'))}</td>
+        <td style="max-width:220px;font-size:11px">${(f(r,'Issue Flags')||'').split(';').filter(x=>x.trim()).map(i=>`<span class="pill open" style="margin:1px 2px 1px 0;display:inline-block">${i.trim()}</span>`).join('')||'—'}</td>
+        <td style="max-width:160px;font-size:11px;color:#888">${(f(r,'Size Mismatches')||'—')}</td>
+        <td><span class="pill ${f(r,'Status')==='Open'?'open':f(r,'Status')==='Closed'?'closed':'inprogress'}">${f(r,'Status')||'Open'}</span></td>
+      </tr>`).join('');
+
+    return `
+      <div class="vendor-block">
+        <div class="vendor-header" data-vnd="${name}">
+          <div style="flex:1">
+            <div class="vendor-name">${name}</div>
+            <div class="vendor-stats">
+              <span><b>${v.records.length}</b> entries</span>
+              <span><b>${v.pos.size}</b> POs</span>
+              <span><b>${v.cuts.size}</b> cuts</span>
+              <span><b>${fmt(received)}</b> units</span>
+              <span><b>${dr}</b> defect rate</span>
+              ${topFlags.length?`<span>Top: <b>${topFlags.map(([i,c])=>`${i} ×${c}`).join(' · ')}</b></span>`:''}
+            </div>
+          </div>
+          <span class="expand-icon">${isOpen?'▲':'▼'}</span>
+        </div>
+        ${isOpen?`
+        <div class="vcards">
+          <div class="vcard"><div class="label">Ordered</div><div class="val">${fmt(ordered)}</div></div>
+          <div class="vcard"><div class="label">Received</div><div class="val">${fmt(received)}</div></div>
+          <div class="vcard"><div class="label">Defects</div><div class="val ${defects>0?'red':''}">${fmt(defects)}</div></div>
+          <div class="vcard"><div class="label">Retagged</div><div class="val">${fmt(retagged)}</div></div>
+          <div class="vcard"><div class="label">Defect Rate</div><div class="val ${defects>0?'red':''}">${dr}</div></div>
+        </div>
+        <div class="table-wrap" style="border:none;border-radius:0;border-top:0.5px solid #eee">
+          <table>
+            <thead><tr><th>Brand</th><th>PO #</th><th>Cut #</th><th>Style</th><th>Date Recv'd</th><th>Ordered</th><th>Received</th><th>Defects</th><th>Retagged</th><th>Issue Flags</th><th>Size Mismatches</th><th>Status</th></tr></thead>
+            <tbody>${detailRows}</tbody>
+          </table>
+        </div>`:''}
+      </div>`;
+  }).join('');
+}
+
+function renderExport(){
+  const unpushed = records.filter(r=>!f(r,'NS Pushed'));
+  return `${msgBanner()}
+    <div class="export-section">
+      <h3>NetSuite Receiving Export</h3>
+      <p style="font-size:12px;font-family:monospace;color:#888;margin-bottom:1rem">Export a CSV for NetSuite receiving entry. Mark records as pushed after importing so you never double-import.</p>
+      <div class="row-gap">
+        <button class="btn amber" id="exp-all">Export All Records (CSV)</button>
+        <button class="btn primary" id="exp-unpushed">Export Unpushed Only (${unpushed.length})</button>
+        <button class="btn" id="mark-all-pushed">Mark All as NS Pushed</button>
+      </div>
+    </div>
+    <div class="section-title">Unpushed Records — ${unpushed.length}</div>
+    ${unpushed.length===0?`<div class="empty">All records have been marked as pushed to NetSuite.</div>`:`
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Brand</th><th>Vendor</th><th>PO #</th><th>Cut #</th><th>Style</th><th>Date Recv'd</th><th>Ordered</th><th>Received</th><th>Correct</th><th>Defects</th><th>Retagged</th><th>Seconds</th><th>Action</th></tr></thead>
+        <tbody>${unpushed.map(r=>`
+          <tr>
+            <td><span class="pill ${(f(r,'Brand')||'aac').toLowerCase()}">${f(r,'Brand')}</span></td>
+            <td>${f(r,'Vendor')||'—'}</td>
+            <td>${f(r,'PO Number')||'—'}</td>
+            <td>${f(r,'Cut Number')||'—'}</td>
+            <td>${f(r,'Style')||'—'}</td>
+            <td>${fmtDate(f(r,'Date Received'))}</td>
+            <td style="text-align:right">${fmt(f(r,'Units Ordered'))}</td>
+            <td style="text-align:right">${fmt(f(r,'Units Received'))}</td>
+            <td style="text-align:right">${fmt(f(r,'Units Correct'))}</td>
+            <td style="text-align:right">${fmt((+f(r,'Fabric Defects')||0)+(+f(r,'Sewing Defects')||0))}</td>
+            <td style="text-align:right">${fmt(f(r,'Retagged'))}</td>
+            <td style="text-align:right">${fmt(f(r,'Seconds'))}</td>
+            <td><button class="btn sm" data-push="${r.id}">✓ Mark Pushed</button></td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`}`;
+}
+
+function exportCSV(mode){
+  const rows = mode==='all'?records:records.filter(r=>!f(r,'NS Pushed'));
+  if(!rows.length){alert('No records to export.');return;}
+  const headers = ['Brand','Vendor','PO Number','Cut Number','Style','Date Received','Units Ordered','Units Received','Units Correct','Fabric Defects','Sewing Defects','Retagged','Seconds','Issue Flags','Size Mismatches','Notes','Status','NS Pushed'];
+  const csv = [headers.join(','),...rows.map(r=>headers.map(h=>{
+    const v = f(r,h)||'';
+    return typeof v==='string'&&v.includes(',') ? `"${v.replace(/"/g,"'")}"` : v;
+  }).join(','))].join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+  a.download = `aac_receiving_${mode}_${today()}.csv`;
+  a.click();
+}
+
+function bindEvents(){
+  document.querySelectorAll('.tab').forEach(t=>{
+    t.onclick = ()=>{ clearMsg(); activeTab=t.dataset.tab; render(); };
+  });
+
+  const q = id=>document.getElementById(id);
+
+  if(activeTab==='entry'){
+    document.querySelectorAll('.issue-check').forEach(el=>{
+      el.onclick = ()=>{
+        const t = el.dataset.issue;
+        const idx = entryState.issue_types.indexOf(t);
+        if(idx>=0) entryState.issue_types.splice(idx,1);
+        else entryState.issue_types.push(t);
+        el.classList.toggle('selected');
+      };
+    });
+
+    document.querySelectorAll('[data-si]').forEach(el=>{
+      el.oninput = ()=>{ entryState.size_issues[+el.dataset.si][el.dataset.key]=el.value; };
+    });
+
+    document.querySelectorAll('[data-rmsi]').forEach(el=>{
+      el.onclick = ()=>{ entryState.size_issues.splice(+el.dataset.rmsi,1); render(); };
+    });
+
+    const addSI = q('add-si');
+    if(addSI) addSI.onclick = ()=>{ entryState.size_issues.push({from:'',to:'',qty:''}); render(); };
+
+    const sub = q('submit-entry');
+    if(sub) sub.onclick = async ()=>{
+      entryState.brand = q('e-brand')?.value||'AAC';
+      entryState.vendor = q('e-vendor')?.value||'';
+      entryState.po_number = q('e-po')?.value||'';
+      entryState.cut_number = q('e-cut')?.value||'';
+      entryState.style = q('e-style')?.value||'';
+      entryState.date_received = q('e-date')?.value||today();
+      entryState.units_ordered = q('e-ordered')?.value||'';
+      entryState.units_received = q('e-received')?.value||'';
+      entryState.units_correct = q('e-correct')?.value||'';
+      entryState.units_fabric_defect = q('e-fabric')?.value||'';
+      entryState.units_sewing_defect = q('e-sewing')?.value||'';
+      entryState.units_retagged = q('e-retagged')?.value||'';
+      entryState.units_seconds = q('e-seconds')?.value||'';
+      entryState.notes = q('e-notes')?.value||'';
+      entryState.status = q('e-status')?.value||'Open';
+
+      if(!entryState.vendor||!entryState.po_number||!entryState.cut_number||!entryState.style){
+        setMsg('error','Please fill in Vendor, PO #, Cut #, and Style before saving.');
+        return;
+      }
+
+      saving = true; render();
+      try{
+        const fields = {
+          'Brand': entryState.brand,
+          'Vendor': entryState.vendor,
+          'PO Number': entryState.po_number,
+          'Cut Number': entryState.cut_number,
+          'Style': entryState.style,
+          'Date Received': entryState.date_received||null,
+          'Units Ordered': +entryState.units_ordered||0,
+          'Units Received': +entryState.units_received||0,
+          'Units Correct': +entryState.units_correct||0,
+          'Fabric Defects': +entryState.units_fabric_defect||0,
+          'Sewing Defects': +entryState.units_sewing_defect||0,
+          'Retagged': +entryState.units_retagged||0,
+          'Seconds': +entryState.units_seconds||0,
+          'Issue Flags': entryState.issue_types.join('; '),
+          'Size Mismatches': entryState.size_issues.filter(r=>r.from||r.to).map(r=>`${r.from}→${r.to} (${r.qty})`).join('; '),
+          'Notes': entryState.notes,
+          'Status': entryState.status,
+          'NS Pushed': false
+        };
+        await saveRecord(fields);
+        await loadRecords();
+        entryState = freshEntry();
+        saving = false;
+        activeTab = 'log';
+        setMsg('success','Record saved to Airtable.');
+      }catch(e){
+        saving = false;
+        setMsg('error','Save failed: '+e.message);
+      }
+    };
+
+    const clr = q('clear-entry');
+    if(clr) clr.onclick = ()=>{ entryState=freshEntry(); clearMsg(); render(); };
+  }
+
+  if(activeTab==='log'){
+    const lfb=q('lf-brand'),lfv=q('lf-vendor'),lfp=q('lf-po'),lfs=q('lf-status');
+    if(lfb) lfb.onchange=()=>{logFilter.brand=lfb.value;render();};
+    if(lfv) lfv.onchange=()=>{logFilter.vendor=lfv.value;render();};
+    if(lfp) lfp.oninput=()=>{logFilter.po=lfp.value;render();};
+    if(lfs) lfs.onchange=()=>{logFilter.status=lfs.value;render();};
+
+    const ref = q('refresh-btn');
+    if(ref) ref.onclick=()=>{ clearMsg(); loadRecords(); };
+
+    document.querySelectorAll('[data-edit]').forEach(btn=>{
+      btn.onclick = async ()=>{
+        const r = records.find(x=>x.id===btn.dataset.edit);
+        if(!r) return;
+        const s = prompt(`Status for PO ${f(r,'PO Number')} — enter: Open, In Progress, or Closed`,f(r,'Status')||'Open');
+        if(s&&['Open','In Progress','Closed'].includes(s)){
+          try{ await updateRecord(r.id,{'Status':s}); await loadRecords(); setMsg('success','Status updated.'); }
+          catch(e){ setMsg('error','Update failed: '+e.message); }
+        }
+      };
+    });
+
+    document.querySelectorAll('[data-del]').forEach(btn=>{
+      btn.onclick = async ()=>{
+        if(!confirm('Delete this record? This cannot be undone.')) return;
+        try{ await deleteRecord(btn.dataset.del); await loadRecords(); setMsg('success','Record deleted.'); }
+        catch(e){ setMsg('error','Delete failed: '+e.message); }
+      };
+    });
+  }
+
+  if(activeTab==='vendors'){
+    document.querySelectorAll('[data-vnd]').forEach(el=>{
+      el.onclick = ()=>{ const n=el.dataset.vnd; expanded[n]=!expanded[n]; render(); };
+    });
+  }
+
+  if(activeTab==='export'){
+    const ea=q('exp-all'),eu=q('exp-unpushed'),ma=q('mark-all-pushed');
+    if(ea) ea.onclick=()=>exportCSV('all');
+    if(eu) eu.onclick=()=>exportCSV('unpushed');
+    if(ma) ma.onclick=async ()=>{
+      if(!confirm('Mark all unpushed records as pushed to NetSuite?')) return;
+      const unpushed = records.filter(r=>!f(r,'NS Pushed'));
+      try{
+        for(const r of unpushed) await updateRecord(r.id,{'NS Pushed':true});
+        await loadRecords();
+        setMsg('success','All records marked as pushed.');
+      }catch(e){ setMsg('error','Update failed: '+e.message); }
+    };
+    document.querySelectorAll('[data-push]').forEach(btn=>{
+      btn.onclick = async ()=>{
+        try{ await updateRecord(btn.dataset.push,{'NS Pushed':true}); await loadRecords(); setMsg('success','Marked as pushed.'); }
+        catch(e){ setMsg('error',e.message); }
+      };
+    });
+  }
+}
+
+loadRecords();
+</script>
+</body>
+</html>
