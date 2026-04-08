@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AAC · Receiving & Quality Tracker</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Georgia',serif;background:#f4f2ee;color:#1a1a1a;font-size:14px;min-height:100vh}
+.app{max-width:1300px;margin:0 auto;padding:0 0 4rem}
+.header{background:#1a2332;color:#fff;padding:1rem 1.5rem;display:flex;align-items:center;justify-content:space-between}
+.header h1{font-size:15px;font-weight:400;letter-spacing:.08em;font-family:monospace;text-transform:uppercase}
+.brands{display:flex;gap:8px;align-items:center}
+.badge{font-size:11px;font-weight:600;padding:3px 9px;border-radius:3px;font-family:monospace;letter-spacing:.06em}
+.badge.aac{background:#c8861a;color:#fff}
+.badge.dg{background:#3a5a8a;color:#fff}
+.tabs{display:flex;border-bottom:1px solid #d4d0c8;padding:0 1.5rem;background:#fff;overflow-x:auto}
+.tab{padding:.75rem 1.1rem;font-size:12px;cursor:pointer;border-bottom:2px solid transparent;color:#666;font-family:monospace;letter-spacing:.04em;white-space:nowrap;user-select:none}
+.tab.active{border-bottom-color:#c8861a;color:#1a1a1a;font-weight:600}
+.tab:hover:not(.active){color:#1a1a1a}
+.content{padding:1.5rem}
+.card{background:#fff;border:0.5px solid #ddd;border-radius:6px;padding:.875rem 1rem}
+.card .lbl{font-size:10px;color:#888;font-family:monospace;letter-spacing:.07em;text-transform:uppercase;margin-bottom:4px}
+.card .val{font-size:22px;font-weight:500;font-family:monospace}
+.card .sub{font-size:11px;color:#888;margin-top:2px;font-family:monospace}
+.card.warn .val{color:#c8861a}
+.card.danger .val{color:#c0392b}
+.card.good .val{color:#1e7e4a}
+.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:1.5rem}
+.stitle{font-size:10px;font-family:monospace;letter-spacing:.09em;text-transform:uppercase;color:#888;margin-bottom:.75rem;margin-top:1.25rem}
+.stitle:first-child{margin-top:0}
+.fg{display:grid;gap:1rem}
+.fg2{grid-template-columns:1fr 1fr}
+.fg3{grid-template-columns:1fr 1fr 1fr}
+.fg4{grid-template-columns:1fr 1fr 1fr 1fr}
+@media(max-width:600px){.fg2,.fg3,.fg4{grid-template-columns:1fr}}
+.field{display:flex;flex-direction:column;gap:4px}
+.field label{font-size:10px;font-family:monospace;letter-spacing:.07em;text-transform:uppercase;color:#666}
+.field input,.field select,.field textarea{font-size:13px;font-family:monospace;background:#fff;border:0.5px solid #ccc;border-radius:5px;padding:7px 10px;color:#1a1a1a;width:100%;outline:none}
+.field input:focus,.field select:focus,.field textarea:focus{border-color:#c8861a}
+.field textarea{min-height:70px;resize:vertical}
+.field input[type=number]{text-align:right}
+hr.div{border:none;border-top:0.5px solid #e8e4dc;margin:1.25rem 0}
+.btn{font-family:monospace;font-size:12px;letter-spacing:.04em;padding:7px 16px;border-radius:5px;cursor:pointer;border:0.5px solid #ccc;background:#f4f2ee;color:#1a1a1a}
+.btn:hover{background:#e8e4dc}
+.btn.pri{background:#1a2332;color:#fff;border-color:#1a2332}
+.btn.pri:hover{background:#243044}
+.btn.amb{background:#c8861a;color:#fff;border-color:#c8861a}
+.btn.amb:hover{background:#b07616}
+.btn.red{background:#c0392b;color:#fff;border-color:#c0392b}
+.btn.sm{padding:4px 10px;font-size:11px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.tw{overflow-x:auto;border:0.5px solid #ddd;border-radius:6px}
+table{width:100%;border-collapse:collapse;font-size:12px;font-family:monospace}
+th{background:#f4f2ee;padding:7px 8px;text-align:left;font-size:10px;letter-spacing:.07em;text-transform:uppercase;color:#666;font-weight:600;border-bottom:0.5px solid #ddd;white-space:nowrap}
+th.r,td.r{text-align:right}
+td{padding:6px 8px;border-bottom:0.5px solid #eee;color:#1a1a1a;vertical-align:middle}
+td input{font-size:12px;font-family:monospace;padding:4px 6px;border:0.5px solid #ccc;border-radius:4px;background:#fff;color:#1a1a1a;outline:none;width:70px;text-align:right}
+td input:focus{border-color:#c8861a}
+td input.wide{width:120px;text-align:left}
+td select{font-size:11px;font-family:monospace;padding:3px 5px;border:0.5px solid #ccc;border-radius:4px;background:#fff;color:#1a1a1a;outline:none}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:#faf9f6}
+tr.unexpected td{background:#fef9f0}
+tr.unexpected td:first-child{border-left:3px solid #c8861a}
+.pill{display:inline-block;font-size:10px;font-family:monospace;letter-spacing:.04em;padding:2px 7px;border-radius:3px;font-weight:600}
+.pill.aac{background:#fdf0dc;color:#7a4f00}
+.pill.dg{background:#dbe8f5;color:#1a3a5c}
+.pill.open{background:#fdecea;color:#8b2020}
+.pill.closed{background:#e0f4ea;color:#145a2e}
+.pill.inprogress{background:#fff3dc;color:#7a4f00}
+.pill.unexp{background:#fdf0dc;color:#7a4f00}
+.filters{display:flex;gap:8px;margin-bottom:1rem;flex-wrap:wrap;align-items:center}
+.filters input,.filters select{font-size:12px;font-family:monospace;padding:6px 9px;border:0.5px solid #ccc;border-radius:5px;background:#fff;color:#1a1a1a;outline:none}
+.vblock{border:0.5px solid #ddd;border-radius:6px;margin-bottom:1rem;overflow:hidden}
+.vhdr{background:#f4f2ee;padding:.875rem 1rem;display:flex;align-items:flex-start;justify-content:space-between;cursor:pointer;gap:1rem}
+.vhdr:hover{background:#ece9e2}
+.vname{font-weight:600;font-size:14px;font-family:monospace;margin-bottom:4px}
+.vstats{display:flex;gap:14px;flex-wrap:wrap;font-size:11px;font-family:monospace;color:#666}
+.vstats b{color:#1a1a1a}
+.vcards{display:grid;grid-template-columns:repeat(7,1fr);gap:10px;padding:1rem;border-bottom:0.5px solid #eee}
+@media(max-width:800px){.vcards{grid-template-columns:repeat(3,1fr)}}
+.vc{background:#f4f2ee;border-radius:5px;padding:.75rem}
+.vc .lbl{font-size:10px;color:#888;font-family:monospace;text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px}
+.vc .val{font-size:17px;font-weight:500;font-family:monospace}
+.notice{background:#fdf0dc;border:0.5px solid #c8861a;border-radius:6px;padding:.75rem 1rem;font-size:12px;font-family:monospace;color:#7a4f00;margin-bottom:1rem}
+.err{background:#fdecea;border:0.5px solid #c0392b;border-radius:6px;padding:.75rem 1rem;font-size:12px;font-family:monospace;color:#8b2020;margin-bottom:1rem}
+.suc{background:#e0f4ea;border:0.5px solid #1e7e4a;border-radius:6px;padding:.75rem 1rem;font-size:12px;font-family:monospace;color:#145a2e;margin-bottom:1rem}
+.rg{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.empty{padding:2.5rem;text-align:center;color:#888;font-size:13px;font-family:monospace}
+.paste-area{width:100%;min-height:100px;font-size:12px;font-family:monospace;border:0.5px solid #ccc;border-radius:5px;padding:8px 10px;background:#fff;color:#1a1a1a;resize:vertical;outline:none}
+.paste-area:focus{border-color:#c8861a}
+.step-box{background:#fff;border:0.5px solid #ddd;border-radius:6px;padding:1.25rem;margin-bottom:1rem}
+.step-num{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;background:#1a2332;color:#fff;border-radius:50%;font-size:11px;font-family:monospace;font-weight:600;margin-right:8px;flex-shrink:0}
+.step-title{font-size:12px;font-family:monospace;font-weight:600;letter-spacing:.04em;display:flex;align-items:center;margin-bottom:.875rem}
+.issue-checks{display:flex;flex-wrap:wrap;gap:6px}
+.ic{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-family:monospace;background:#f4f2ee;border:0.5px solid #ccc;border-radius:4px;padding:4px 8px;cursor:pointer;user-select:none}
+.ic.on{background:#fdf0dc;border-color:#c8861a;color:#7a4f00}
+.red-txt{color:#c0392b}
+.loading{text-align:center;padding:3rem;font-family:monospace;font-size:13px;color:#888}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="header">
+    <h1>Receiving &amp; Quality Tracker</h1>
+    <div class="brands"><span class="badge aac">AAC</span><span class="badge dg">DG</span></div>
+  </div>
+  <div class="tabs" id="tabs">
+    <div class="tab active" data-tab="receive">Receive Shipment</div>
+    <div class="tab" data-tab="log">Transaction Log</div>
+    <div class="tab" data-tab="vendors">Vendor Reports</div>
+    <div class="tab" data-tab="export">NetSuite Export</div>
+  </div>
+  <div class="content" id="content"><div class="loading">Loading...</div></div>
+</div>
+<script>
+const BASE='apptqtQiOLllO5rHY', TABLE='tblls64jVLKPGzyUY', TOKEN='pat7x2i9ASx1XS0QS.2e8c3d0b347b1741dbedd6d1161a7bd69753d40954e2ee6e448c3d4d58e61d60';
+const API=`https://api.airtable.com/v0/${BASE}/${TABLE}`;
+const HDR={'Authorization':`Bearer ${TOKEN}`,'Content-Type':'application/json'};
+const ISSUES=['Sizing — Waist Off','Sizing — Length Off','Sizing — Both Off','Sewing Defect','Fabric Defect','Missing Tags','Wrong Label / SKU','Wrong Color','Wrong Style','Overshipment','Undershipment','No Joker Tags','Other'];
+
+let records=[], activeTab='receive', logFilter={brand:'',vendor:'',po:'',status:''}, expanded={}, msg={t:'',m:''}, saving=false;
+
+// Receiving session state
+let session={
+  step:1, // 1=header, 2=paste+parse, 3=inspection grid, 4=done
+  brand:'AAC', vendor:'', po:'', cut:'', date:today(), packingSlip:'',
+  skus:[] // [{sku, desc, ordered, received, correct, fabric, sewing, retagged, seconds, issues:[], sizeMismatch, notes, unexpected}]
+};
+
+function today(){return new Date().toISOString().slice(0,10);}
+function fmt(n){return (+n||0).toLocaleString();}
+function fmtD(d){if(!d)return'—';return new Date(d+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});}
+function f(r,k){return r.fields?.[k]??'';}
+function setMsg(t,m){msg={t,m};render();}
+function clearMsg(){msg={t:'',m:''};}
+
+async function loadRecords(){
+  records=[];let offset='';
+  try{
+    do{
+      const url=API+'?pageSize=100'+(offset?`&offset=${offset}`:'')+`&sort[0][field]=Date+Received&sort[0][direction]=desc`;
+      const res=await fetch(url,{headers:HDR});
+      if(!res.ok)throw new Error('Airtable error: '+res.status);
+      const d=await res.json();
+      records=records.concat(d.records||[]);
+      offset=d.offset||'';
+    }while(offset);
+  }catch(e){setMsg('err','Could not load from Airtable: '+e.message);}
+  render();
+}
+
+async function saveRecords(rows){
+  // Airtable batch: max 10 per request
+  for(let i=0;i<rows.length;i+=10){
+    const batch=rows.slice(i,i+10).map(r=>({fields:r}));
+    const res=await fetch(API,{method:'POST',headers:HDR,body:JSON.stringify({records:batch})});
+    if(!res.ok){const d=await res.json();throw new Error(d.error?.message||'Save failed');}
+  }
+}
+
+async function updateRec(id,fields){
+  const res=await fetch(`${API}/${id}`,{method:'PATCH',headers:HDR,body:JSON.stringify({fields})});
+  if(!res.ok){const d=await res.json();throw new Error(d.error?.message||'Update failed');}
+}
+
+async function deleteRec(id){
+  const res=await fetch(`${API}/${id}`,{method:'DELETE',headers:HDR});
+  if(!res.ok)throw new Error('Delete failed');
+}
+
+function parseNS(text){
+  const lines=text.trim().split('\n').filter(l=>l.trim()&&!l.startsWith('Assembly Item Name'));
+  return lines.map(line=>{
+    const cols=line.split('\t');
+    // Col 0: "SKU Description" (combined), Col 1: SKU, Col 2: desc, Col 4: vendor, Col 7: qty
+    const sku=(cols[1]||'').trim();
+    const desc=(cols[2]||'').trim();
+    const vendor=(cols[4]||'').trim();
+    const ordered=parseInt(cols[7])||0;
+    return {sku,desc,vendor,ordered,received:'',correct:'',fabric:'',sewing:'',retagged:'',seconds:'',issues:[],sizeMismatch:'',notes:'',unexpected:false};
+  }).filter(r=>r.sku);
+}
+
+function render(){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===activeTab));
+  const c=document.getElementById('content');
+  if(activeTab==='receive') c.innerHTML=renderReceive();
+  else if(activeTab==='log') c.innerHTML=renderLog();
+  else if(activeTab==='vendors') c.innerHTML=renderVendors();
+  else if(activeTab==='export') c.innerHTML=renderExport();
+  bind();
+}
+
+function msgBanner(){
+  if(!msg.m)return'';
+  if(msg.t==='err')return`<div class="err">${msg.m}</div>`;
+  if(msg.t==='suc')return`<div class="suc">${msg.m}</div>`;
+  return'';
+}
+
+function renderReceive(){
+  const s=session;
+  if(s.step===4) return renderDone();
+  return`${msgBanner()}
+  ${s.step>=1?renderStep1():''}
+  ${s.step>=2?renderStep2():''}
+  ${s.step>=3?renderStep3():''}`;
+}
+
+function renderStep1(){
+  const s=session;
+  const done=s.step>1;
+  return`<div class="step-box">
+    <div class="step-title"><span class="step-num">1</span>PO Header Information</div>
+    <div class="fg fg4" style="margin-bottom:1rem">
+      <div class="field"><label>Brand *</label>
+        <select id="s-brand" ${done?'disabled':''}>
+          <option ${s.brand==='AAC'?'selected':''}>AAC</option>
+          <option ${s.brand==='DG'?'selected':''}>DG</option>
+        </select></div>
+      <div class="field"><label>PO # *</label><input id="s-po" value="${s.po}" placeholder="e.g. 17861" ${done?'disabled':''}></div>
+      <div class="field"><label>Cut #</label><input id="s-cut" value="${s.cut}" placeholder="e.g. C-2241" ${done?'disabled':''}></div>
+      <div class="field"><label>Date Received</label><input type="date" id="s-date" value="${s.date}" ${done?'disabled':''}></div>
+      <div class="field"><label>Vendor</label><input id="s-vendor" value="${s.vendor}" placeholder="Auto-filled from paste" ${done?'disabled':''}></div>
+      <div class="field"><label>Packing Slip #</label><input id="s-ps" value="${s.packingSlip}" placeholder="Optional" ${done?'disabled':''}></div>
+    </div>
+    ${!done?`<button class="btn pri" id="step1-next">Continue to Paste PO Lines →</button>`:`<div style="font-size:11px;font-family:monospace;color:#888">PO ${s.po} · ${s.brand} · ${s.vendor} · ${fmtD(s.date)} <button class="btn sm" id="step1-edit" style="margin-left:8px">Edit</button></div>`}
+  </div>`;
+}
+
+function renderStep2(){
+  const s=session;
+  const done=s.step>2;
+  return`<div class="step-box">
+    <div class="step-title"><span class="step-num">2</span>Paste NetSuite PO Lines</div>
+    ${!done?`
+    <p style="font-size:12px;font-family:monospace;color:#666;margin-bottom:.75rem">In NetSuite, open the PO → Items tab → select all rows → copy → paste below.</p>
+    <textarea class="paste-area" id="ns-paste" placeholder="Paste NetSuite PO lines here..."></textarea>
+    <div class="rg" style="margin-top:.75rem">
+      <button class="btn pri" id="parse-btn">Parse PO Lines →</button>
+      <span style="font-size:11px;font-family:monospace;color:#888" id="parse-count"></span>
+    </div>`:`<div style="font-size:11px;font-family:monospace;color:#888">${s.skus.filter(x=>!x.unexpected).length} SKUs loaded from PO · <button class="btn sm" id="step2-edit">Re-paste</button></div>`}
+  </div>`;
+}
+
+function renderStep3(){
+  const s=session;
+  const skus=s.skus;
+  if(!skus.length)return'';
+
+  const rows=skus.map((r,i)=>{
+    const hasIssue=r.issues.length>0;
+    const isUnexp=r.unexpected;
+    return`<tr class="${isUnexp?'unexpected':''}">
+      <td>${isUnexp?`<span class="pill unexp">NEW</span> `:''}${r.sku}</td>
+      <td style="color:#666;font-size:11px;max-width:180px">${r.desc||''}</td>
+      <td class="r">${isUnexp?'—':r.ordered}</td>
+      <td class="r"><input type="number" value="${r.received}" data-i="${i}" data-k="received" min="0"></td>
+      <td class="r"><input type="number" value="${r.correct}" data-i="${i}" data-k="correct" min="0"></td>
+      <td class="r"><input type="number" value="${r.fabric}" data-i="${i}" data-k="fabric" min="0" style="width:55px"></td>
+      <td class="r"><input type="number" value="${r.sewing}" data-i="${i}" data-k="sewing" min="0" style="width:55px"></td>
+      <td class="r"><input type="number" value="${r.retagged}" data-i="${i}" data-k="retagged" min="0" style="width:55px"></td>
+      <td class="r"><input type="number" value="${r.seconds}" data-i="${i}" data-k="seconds" min="0" style="width:55px"></td>
+      <td><button class="btn sm ${hasIssue?'amb':''}" data-flags="${i}">${hasIssue?r.issues.length+' flag(s)':'+ Flags'}</button></td>
+      <td><input class="wide" value="${r.sizeMismatch}" data-i="${i}" data-k="sizeMismatch" placeholder="e.g. 34x32→34x34"></td>
+      <td><input class="wide" value="${r.notes}" data-i="${i}" data-k="notes" placeholder="Notes"></td>
+      <td><button class="btn sm red" data-rm="${i}">×</button></td>
+    </tr>`;
+  }).join('');
+
+  const totOrdered=skus.filter(x=>!x.unexpected).reduce((a,r)=>a+(+r.ordered||0),0);
+  const totReceived=skus.reduce((a,r)=>a+(+r.received||0),0);
+  const totDefects=skus.reduce((a,r)=>a+(+r.fabric||0)+(+r.sewing||0),0);
+  const totRetagged=skus.reduce((a,r)=>a+(+r.retagged||0),0);
+
+  return`<div class="step-box">
+    <div class="step-title"><span class="step-num">3</span>Inspection — SKU by SKU
+      <button class="btn sm" id="add-unexp" style="margin-left:auto">+ Add Unexpected SKU</button>
+    </div>
+    <div class="cards" style="grid-template-columns:repeat(4,1fr);margin-bottom:1rem">
+      <div class="card"><div class="lbl">SKUs on PO</div><div class="val">${skus.filter(x=>!x.unexpected).length}</div></div>
+      <div class="card warn"><div class="lbl">Unexpected SKUs</div><div class="val">${skus.filter(x=>x.unexpected).length}</div></div>
+      <div class="card"><div class="lbl">Total Ordered</div><div class="val">${fmt(totOrdered)}</div></div>
+      <div class="card"><div class="lbl">Total Received</div><div class="val">${fmt(totReceived)}</div></div>
+    </div>
+    <div class="tw" style="margin-bottom:1rem">
+      <table>
+        <thead><tr>
+          <th>SKU</th><th>Description</th><th class="r">Ordered</th><th class="r">Received</th><th class="r">Correct</th>
+          <th class="r">Fabric Def</th><th class="r">Sewing Def</th><th class="r">Retagged</th><th class="r">Seconds</th>
+          <th>Issue Flags</th><th>Size Mismatch</th><th>Notes</th><th></th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+        <tfoot><tr style="background:#f4f2ee;font-weight:600">
+          <td colspan="2" style="font-size:11px;font-family:monospace">TOTALS</td>
+          <td class="r">${fmt(totOrdered)}</td>
+          <td class="r">${fmt(totReceived)}</td>
+          <td class="r">${fmt(skus.reduce((a,r)=>a+(+r.correct||0),0))}</td>
+          <td class="r ${totDefects>0?'red-txt':''}">${fmt(totDefects)}</td>
+          <td class="r"></td>
+          <td class="r ${totRetagged>0?'red-txt':''}">${fmt(totRetagged)}</td>
+          <td class="r">${fmt(skus.reduce((a,r)=>a+(+r.seconds||0),0))}</td>
+          <td colspan="4"></td>
+        </tr></tfoot>
+      </table>
+    </div>
+    <div class="rg">
+      <button class="btn pri" id="submit-btn" ${saving?'disabled':''}>${saving?'Saving...':'Submit & Save to Airtable'}</button>
+      <button class="btn" id="reset-btn">Start Over</button>
+    </div>
+  </div>`;
+}
+
+function renderDone(){
+  const s=session;
+  const totRecv=s.skus.reduce((a,r)=>a+(+r.received||0),0);
+  const totDef=s.skus.reduce((a,r)=>a+(+r.fabric||0)+(+r.sewing||0),0);
+  const totRetag=s.skus.reduce((a,r)=>a+(+r.retagged||0),0);
+  const unexpected=s.skus.filter(x=>x.unexpected);
+  return`<div class="step-box" style="text-align:center;padding:2rem">
+    <div style="font-size:28px;margin-bottom:.5rem">✓</div>
+    <div style="font-family:monospace;font-weight:600;font-size:16px;margin-bottom:.5rem">PO ${s.po} Received</div>
+    <div style="font-family:monospace;font-size:12px;color:#666;margin-bottom:1.5rem">${s.skus.length} SKUs · ${fmt(totRecv)} units · ${fmt(totDef)} defects · ${fmt(totRetag)} retagged${unexpected.length?` · <span style="color:#c8861a">${unexpected.length} unexpected SKU(s)</span>`:''}</div>
+    <div class="rg" style="justify-content:center">
+      <button class="btn pri" id="new-po-btn">Receive Another PO</button>
+      <button class="btn amb" id="goto-export">View NetSuite Export →</button>
+    </div>
+    ${unexpected.length?`<div style="margin-top:1.5rem;text-align:left"><div class="stitle">Unexpected SKUs — Flag for NetSuite Review</div>
+    <div class="tw"><table><thead><tr><th>SKU</th><th>Description</th><th class="r">Received</th><th>Notes</th></tr></thead>
+    <tbody>${unexpected.map(r=>`<tr><td><span class="pill unexp">NEW</span> ${r.sku}</td><td>${r.desc}</td><td class="r">${r.received}</td><td style="color:#888">${r.notes||'—'}</td></tr>`).join('')}</tbody>
+    </table></div></div>`:''}
+  </div>`;
+}
+
+function renderLog(){
+  const vendorOpts=[...new Set(records.map(r=>f(r,'Vendor')).filter(Boolean))].sort().map(v=>`<option value="${v}" ${logFilter.vendor===v?'selected':''}>${v}</option>`).join('');
+  let rows=records.filter(r=>{
+    if(logFilter.brand&&f(r,'Brand')!==logFilter.brand)return false;
+    if(logFilter.vendor&&f(r,'Vendor')!==logFilter.vendor)return false;
+    if(logFilter.po&&!(f(r,'PO Number')||'').toLowerCase().includes(logFilter.po.toLowerCase()))return false;
+    if(logFilter.status&&f(r,'Status')!==logFilter.status)return false;
+    return true;
+  });
+
+  const tRows=rows.map(r=>{
+    const defects=(+f(r,'Fabric Defects')||0)+(+f(r,'Sewing Defects')||0);
+    return`<tr>
+      <td><span class="pill ${(f(r,'Brand')||'aac').toLowerCase()}">${f(r,'Brand')||'—'}</span></td>
+      <td>${f(r,'Vendor')||'—'}</td>
+      <td>${f(r,'PO Number')||'—'}</td>
+      <td>${f(r,'Cut Number')||'—'}</td>
+      <td>${f(r,'SKU')||'—'}</td>
+      <td style="color:#666;font-size:11px">${f(r,'SKU Description')||'—'}</td>
+      <td>${fmtD(f(r,'Date Received'))}</td>
+      <td class="r">${fmt(f(r,'Ordered Qty'))}</td>
+      <td class="r">${fmt(f(r,'Received Qty'))}</td>
+      <td class="r ${defects>0?'red-txt':''}">${fmt(defects)}</td>
+      <td class="r">${fmt(f(r,'Retagged'))}</td>
+      ${f(r,'Is Unexpected')?`<td><span class="pill unexp">NEW</span></td>`:'<td>—</td>'}
+      <td><span class="pill ${f(r,'Status')==='Open'?'open':f(r,'Status')==='Closed'?'closed':'inprogress'}">${f(r,'Status')||'Open'}</span></td>
+      <td>
+        <button class="btn sm" data-edit="${r.id}" style="margin-right:3px">Edit</button>
+        <button class="btn sm red" data-del="${r.id}">Del</button>
+      </td>
+    </tr>`;
+  }).join('');
+
+  return`${msgBanner()}
+  <div class="filters">
+    <select id="lf-brand"><option value="">All Brands</option><option value="AAC" ${logFilter.brand==='AAC'?'selected':''}>AAC</option><option value="DG" ${logFilter.brand==='DG'?'selected':''}>DG</option></select>
+    <select id="lf-vendor"><option value="">All Vendors</option>${vendorOpts}</select>
+    <input id="lf-po" placeholder="Search PO #..." value="${logFilter.po}" style="width:130px">
+    <select id="lf-status"><option value="">All Statuses</option><option value="Open" ${logFilter.status==='Open'?'selected':''}>Open</option><option value="In Progress" ${logFilter.status==='In Progress'?'selected':''}>In Progress</option><option value="Closed" ${logFilter.status==='Closed'?'selected':''}>Closed</option></select>
+    <span style="font-family:monospace;font-size:11px;color:#888">${rows.length} SKU record${rows.length!==1?'s':''}</span>
+    <button class="btn sm amb" id="refresh-btn" style="margin-left:auto">↻ Refresh</button>
+  </div>
+  ${rows.length===0?`<div class="empty">No records match filters.</div>`:`
+  <div class="tw">
+    <table>
+      <thead><tr><th>Brand</th><th>Vendor</th><th>PO #</th><th>Cut #</th><th>SKU</th><th>Description</th><th>Date Recv'd</th><th class="r">Ordered</th><th class="r">Received</th><th class="r">Defects</th><th class="r">Retagged</th><th>Unexpected</th><th>Status</th><th>Actions</th></tr></thead>
+      <tbody>${tRows}</tbody>
+    </table>
+  </div>`}`;
+}
+
+function renderVendors(){
+  const vm={};
+  records.forEach(r=>{
+    const v=f(r,'Vendor')||'Unknown';
+    if(!vm[v])vm[v]={records:[],pos:new Set(),cuts:new Set()};
+    vm[v].records.push(r);
+    vm[v].pos.add(f(r,'PO Number'));
+    vm[v].cuts.add(f(r,'Cut Number'));
+  });
+  if(!Object.keys(vm).length)return`${msgBanner()}<div class="empty">No records yet.</div>`;
+
+  return msgBanner()+Object.entries(vm).map(([name,v])=>{
+    const ordered=v.records.reduce((a,r)=>a+(+f(r,'Ordered Qty')||0),0);
+    const received=v.records.reduce((a,r)=>a+(+f(r,'Received Qty')||0),0);
+    const defects=v.records.reduce((a,r)=>a+(+f(r,'Fabric Defects')||0)+(+f(r,'Sewing Defects')||0),0);
+    const retagged=v.records.reduce((a,r)=>a+(+f(r,'Retagged')||0),0);
+    const dr=received?((defects/received)*100).toFixed(1)+'%':'—';
+    const rr=received?((retagged/received)*100).toFixed(1)+'%':'—';
+    const cr=received?(((defects+retagged)/received)*100).toFixed(1)+'%':'—';
+    const unexpected=v.records.filter(r=>f(r,'Is Unexpected')).length;
+    const allFlags=v.records.flatMap(r=>(f(r,'Issue Flags')||'').split(';').map(x=>x.trim()).filter(Boolean));
+    const fc={};allFlags.forEach(i=>{fc[i]=(fc[i]||0)+1;});
+    const topFlags=Object.entries(fc).sort((a,b)=>b[1]-a[1]).slice(0,4);
+    const isOpen=expanded[name];
+
+    const dRows=v.records.map(r=>`<tr ${f(r,'Is Unexpected')?'class="unexpected"':''}>
+      <td><span class="pill ${(f(r,'Brand')||'aac').toLowerCase()}">${f(r,'Brand')}</span></td>
+      <td>${f(r,'PO Number')||'—'}</td>
+      <td>${f(r,'Cut Number')||'—'}</td>
+      <td>${f(r,'SKU')||'—'}</td>
+      <td style="color:#666;font-size:11px">${f(r,'SKU Description')||'—'}</td>
+      <td>${fmtD(f(r,'Date Received'))}</td>
+      <td class="r">${fmt(f(r,'Ordered Qty'))}</td>
+      <td class="r">${fmt(f(r,'Received Qty'))}</td>
+      <td class="r ${((+f(r,'Fabric Defects')||0)+(+f(r,'Sewing Defects')||0))>0?'red-txt':''}">${fmt((+f(r,'Fabric Defects')||0)+(+f(r,'Sewing Defects')||0))}</td>
+      <td class="r">${fmt(f(r,'Retagged'))}</td>
+      <td style="font-size:11px">${(f(r,'Issue Flags')||'').split(';').filter(x=>x.trim()).map(i=>`<span class="pill open" style="margin:1px 2px 1px 0;display:inline-block">${i.trim()}</span>`).join('')||'—'}</td>
+      <td style="font-size:11px;color:#888">${f(r,'Size Mismatch Notes')||'—'}</td>
+      <td><span class="pill ${f(r,'Status')==='Open'?'open':f(r,'Status')==='Closed'?'closed':'inprogress'}">${f(r,'Status')||'Open'}</span></td>
+    </tr>`).join('');
+
+    return`<div class="vblock">
+      <div class="vhdr" data-vnd="${name}">
+        <div style="flex:1">
+          <div class="vname">${name}</div>
+          <div class="vstats">
+            <span><b>${v.pos.size}</b> POs · <b>${v.records.length}</b> SKU records</span>
+            <span><b>${fmt(received)}</b> units recv'd</span>
+            <span><b>${dr}</b> defect rate</span>
+            <span><b>${rr}</b> retag rate</span>
+            <span><b>${cr}</b> combined rate</span>
+            ${unexpected?`<span style="color:#c8861a"><b>${unexpected}</b> unexpected SKUs</span>`:''}
+            ${topFlags.length?`<span>Top issues: <b>${topFlags.map(([i,c])=>`${i} ×${c}`).join(' · ')}</b></span>`:''}
+          </div>
+        </div>
+        <span style="font-size:11px;color:#888">${isOpen?'▲':'▼'}</span>
+      </div>
+      ${isOpen?`
+      <div class="vcards">
+        <div class="vc"><div class="lbl">Ordered</div><div class="val">${fmt(ordered)}</div></div>
+        <div class="vc"><div class="lbl">Received</div><div class="val">${fmt(received)}</div></div>
+        <div class="vc"><div class="lbl">Defects</div><div class="val ${defects>0?'red-txt':''}">${fmt(defects)}</div></div>
+        <div class="vc"><div class="lbl">Retagged</div><div class="val ${retagged>0?'red-txt':''}">${fmt(retagged)}</div></div>
+        <div class="vc"><div class="lbl">Defect Rate</div><div class="val ${defects>0?'red-txt':''}">${dr}</div></div>
+        <div class="vc"><div class="lbl">Retag Rate</div><div class="val ${retagged>0?'red-txt':''}">${rr}</div></div>
+        <div class="vc"><div class="lbl">Combined Rate</div><div class="val ${(defects+retagged)>0?'red-txt':''}">${cr}</div></div>
+      </div>
+      <div class="tw" style="border:none;border-radius:0;border-top:0.5px solid #eee">
+        <table>
+          <thead><tr><th>Brand</th><th>PO #</th><th>Cut #</th><th>SKU</th><th>Description</th><th>Date</th><th class="r">Ordered</th><th class="r">Received</th><th class="r">Defects</th><th class="r">Retagged</th><th>Issues</th><th>Size Mismatches</th><th>Status</th></tr></thead>
+          <tbody>${dRows}</tbody>
+        </table>
+      </div>`:''}
+    </div>`;
+  }).join('');
+}
+
+function renderExport(){
+  const unpushed=records.filter(r=>!f(r,'NS Pushed'));
+  const tRows=unpushed.map(r=>`<tr ${f(r,'Is Unexpected')?'class="unexpected"':''}>
+    <td><span class="pill ${(f(r,'Brand')||'aac').toLowerCase()}">${f(r,'Brand')}</span></td>
+    <td>${f(r,'Vendor')||'—'}</td>
+    <td>${f(r,'PO Number')||'—'}</td>
+    <td>${f(r,'SKU')||'—'}</td>
+    <td style="color:#666;font-size:11px">${f(r,'SKU Description')||'—'}</td>
+    <td>${fmtD(f(r,'Date Received'))}</td>
+    <td class="r">${fmt(f(r,'Ordered Qty'))}</td>
+    <td class="r">${fmt(f(r,'Received Qty'))}</td>
+    <td class="r">${fmt(f(r,'Correct Qty'))}</td>
+    <td class="r">${fmt((+f(r,'Fabric Defects')||0)+(+f(r,'Sewing Defects')||0))}</td>
+    <td class="r">${fmt(f(r,'Retagged'))}</td>
+    <td class="r">${fmt(f(r,'Seconds'))}</td>
+    ${f(r,'Is Unexpected')?'<td><span class="pill unexp">NEW — Not on PO</span></td>':'<td>—</td>'}
+    <td><button class="btn sm" data-push="${r.id}">✓ Mark Pushed</button></td>
+  </tr>`).join('');
+
+  return`${msgBanner()}
+  <div style="background:#fff;border:0.5px solid #ddd;border-radius:6px;padding:1.25rem;margin-bottom:1rem">
+    <div class="stitle" style="margin-top:0">NetSuite Receiving Export</div>
+    <p style="font-size:12px;font-family:monospace;color:#888;margin-bottom:1rem">One row per SKU. Use received qty for NS receiving entry. Unexpected SKUs highlighted — create new PO lines for these in NS first.</p>
+    <div class="rg">
+      <button class="btn amb" id="exp-all">Export All (CSV)</button>
+      <button class="btn pri" id="exp-unpushed">Export Unpushed Only (${unpushed.length})</button>
+      <button class="btn" id="mark-all">Mark All as NS Pushed</button>
+    </div>
+  </div>
+  <div class="stitle">Unpushed Records — ${unpushed.length} SKU lines</div>
+  ${unpushed.length===0?`<div class="empty">All records pushed to NetSuite.</div>`:`
+  <div class="tw">
+    <table>
+      <thead><tr><th>Brand</th><th>Vendor</th><th>PO #</th><th>SKU</th><th>Description</th><th>Date</th><th class="r">Ordered</th><th class="r">Received</th><th class="r">Correct</th><th class="r">Defects</th><th class="r">Retagged</th><th class="r">Seconds</th><th>Note</th><th>Action</th></tr></thead>
+      <tbody>${tRows}</tbody>
+    </table>
+  </div>`}`;
+}
+
+function exportCSV(mode){
+  const rows=mode==='all'?records:records.filter(r=>!f(r,'NS Pushed'));
+  if(!rows.length){alert('No records to export.');return;}
+  const headers=['Brand','Vendor','PO Number','Cut Number','SKU','SKU Description','Date Received','Ordered Qty','Received Qty','Correct Qty','Fabric Defects','Sewing Defects','Retagged','Seconds','Issue Flags','Size Mismatch Notes','Notes','Is Unexpected','Status','NS Pushed'];
+  const csv=[headers.join(','),...rows.map(r=>headers.map(h=>{
+    const v=f(r,h);
+    if(typeof v==='boolean')return v?'Yes':'No';
+    const s=String(v??'');
+    return s.includes(',')||s.includes('"')?`"${s.replace(/"/g,"'")}"`:s;
+  }).join(','))].join('\n');
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+  a.download=`aac_ns_receiving_${mode}_${today()}.csv`;
+  a.click();
+}
+
+// Issue flags modal (inline toggle per row)
+let flagRow=null;
+function openFlags(i){
+  flagRow=i;
+  const r=session.skus[i];
+  const modal=`<div id="flag-modal" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.35);z-index:999;display:flex;align-items:center;justify-content:center">
+    <div style="background:#fff;border-radius:8px;padding:1.5rem;max-width:480px;width:90%;box-shadow:0 4px 24px rgba(0,0,0,.15)">
+      <div style="font-family:monospace;font-weight:600;margin-bottom:1rem">Issue Flags — ${r.sku}</div>
+      <div class="issue-checks" style="margin-bottom:1.25rem">${ISSUES.map(t=>`<span class="ic ${r.issues.includes(t)?'on':''}" data-flag="${t}">${t}</span>`).join('')}</div>
+      <button class="btn pri" id="flag-done">Done</button>
+    </div>
+  </div>`;
+  document.body.insertAdjacentHTML('beforeend',modal);
+  document.querySelectorAll('[data-flag]').forEach(el=>{
+    el.onclick=()=>{
+      const t=el.dataset.flag;
+      const idx=session.skus[flagRow].issues.indexOf(t);
+      if(idx>=0)session.skus[flagRow].issues.splice(idx,1);
+      else session.skus[flagRow].issues.push(t);
+      el.classList.toggle('on');
+    };
+  });
+  document.getElementById('flag-done').onclick=()=>{
+    document.getElementById('flag-modal').remove();
+    render();
+  };
+}
+
+function resetSession(){
+  session={step:1,brand:'AAC',vendor:'',po:'',cut:'',date:today(),packingSlip:'',skus:[]};
+}
+
+function bind(){
+  // Tab switching
+  document.querySelectorAll('.tab').forEach(t=>{
+    t.onclick=()=>{clearMsg();activeTab=t.dataset.tab;render();};
+  });
+
+  // Step 1
+  const s1n=document.getElementById('step1-next');
+  if(s1n)s1n.onclick=()=>{
+    const po=document.getElementById('s-po')?.value?.trim();
+    if(!po){setMsg('err','Please enter a PO number.');return;}
+    session.brand=document.getElementById('s-brand')?.value||'AAC';
+    session.po=po;
+    session.cut=document.getElementById('s-cut')?.value||'';
+    session.date=document.getElementById('s-date')?.value||today();
+    session.vendor=document.getElementById('s-vendor')?.value||'';
+    session.packingSlip=document.getElementById('s-ps')?.value||'';
+    session.step=2;
+    clearMsg();render();
+  };
+  const s1e=document.getElementById('step1-edit');
+  if(s1e)s1e.onclick=()=>{session.step=1;session.skus=[];render();};
+
+  // Step 2 parse
+  const pb=document.getElementById('parse-btn');
+  if(pb)pb.onclick=()=>{
+    const text=document.getElementById('ns-paste')?.value||'';
+    const parsed=parseNS(text);
+    if(!parsed.length){setMsg('err','Could not parse any SKU lines. Make sure you copied the rows from the NetSuite Items tab.');return;}
+    session.skus=parsed;
+    if(!session.vendor&&parsed[0]?.vendor)session.vendor=parsed[0].vendor;
+    session.step=3;
+    clearMsg();render();
+  };
+  const s2e=document.getElementById('step2-edit');
+  if(s2e)s2e.onclick=()=>{session.step=2;session.skus=[];render();};
+
+  // Step 3 grid inputs
+  document.querySelectorAll('td input[data-k]').forEach(el=>{
+    el.oninput=()=>{session.skus[+el.dataset.i][el.dataset.k]=el.value;};
+  });
+
+  // Flag buttons
+  document.querySelectorAll('[data-flags]').forEach(btn=>{
+    btn.onclick=()=>openFlags(+btn.dataset.flags);
+  });
+
+  // Remove row
+  document.querySelectorAll('[data-rm]').forEach(btn=>{
+    btn.onclick=()=>{session.skus.splice(+btn.dataset.rm,1);render();};
+  });
+
+  // Add unexpected SKU
+  const au=document.getElementById('add-unexp');
+  if(au)au.onclick=()=>{
+    const sku=prompt('Enter SKU (e.g. DB202-W38-i30):');
+    if(!sku)return;
+    const desc=prompt('Description (optional):','');
+    session.skus.push({sku:sku.trim(),desc:desc||'',ordered:0,received:'',correct:'',fabric:'',sewing:'',retagged:'',seconds:'',issues:[],sizeMismatch:'',notes:'',unexpected:true});
+    render();
+  };
+
+  // Submit
+  const sub=document.getElementById('submit-btn');
+  if(sub)sub.onclick=async()=>{
+    // Read all current input values before saving
+    document.querySelectorAll('td input[data-k]').forEach(el=>{
+      session.skus[+el.dataset.i][el.dataset.k]=el.value;
+    });
+    saving=true;render();
+    try{
+      const rows=session.skus.map(r=>({
+        'Brand':session.brand,
+        'Vendor':session.vendor,
+        'PO Number':session.po,
+        'Cut Number':session.cut,
+        'Style':r.sku.split('-')[0]||'',
+        'Date Received':session.date||null,
+        'SKU':r.sku,
+        'SKU Description':r.desc||'',
+        'Is Unexpected':r.unexpected||false,
+        'Ordered Qty':+r.ordered||0,
+        'Received Qty':+r.received||0,
+        'Correct Qty':+r.correct||0,
+        'Fabric Defects':+r.fabric||0,
+        'Sewing Defects':+r.sewing||0,
+        'Retagged':+r.retagged||0,
+        'Seconds':+r.seconds||0,
+        'Issue Flags':r.issues.join('; '),
+        'Size Mismatch Notes':r.sizeMismatch||'',
+        'Notes':r.notes||'',
+        'Status':'Open',
+        'NS Pushed':false
+      }));
+      await saveRecords(rows);
+      await loadRecords();
+      saving=false;
+      session.step=4;
+      render();
+    }catch(e){
+      saving=false;
+      setMsg('err','Save failed: '+e.message);
+    }
+  };
+
+  // Reset
+  const rb=document.getElementById('reset-btn');
+  if(rb)rb.onclick=()=>{if(confirm('Start over? All entered data will be lost.'))resetSession();render();};
+
+  // Done screen
+  const np=document.getElementById('new-po-btn');
+  if(np)np.onclick=()=>{resetSession();render();};
+  const ge=document.getElementById('goto-export');
+  if(ge)ge.onclick=()=>{activeTab='export';render();};
+
+  // Log filters
+  const lfb=document.getElementById('lf-brand'),lfv=document.getElementById('lf-vendor'),lfp=document.getElementById('lf-po'),lfs=document.getElementById('lf-status');
+  if(lfb)lfb.onchange=()=>{logFilter.brand=lfb.value;render();};
+  if(lfv)lfv.onchange=()=>{logFilter.vendor=lfv.value;render();};
+  if(lfp)lfp.oninput=()=>{logFilter.po=lfp.value;render();};
+  if(lfs)lfs.onchange=()=>{logFilter.status=lfs.value;render();};
+  const ref=document.getElementById('refresh-btn');
+  if(ref)ref.onclick=()=>{clearMsg();loadRecords();};
+
+  // Log edit/delete
+  document.querySelectorAll('[data-edit]').forEach(btn=>{
+    btn.onclick=async()=>{
+      const r=records.find(x=>x.id===btn.dataset.edit);if(!r)return;
+      const s=prompt(`Status for ${f(r,'SKU')} — Open, In Progress, or Closed:`,f(r,'Status')||'Open');
+      if(s&&['Open','In Progress','Closed'].includes(s)){
+        try{await updateRec(r.id,{'Status':s});await loadRecords();setMsg('suc','Status updated.');}
+        catch(e){setMsg('err','Update failed: '+e.message);}
+      }
+    };
+  });
+  document.querySelectorAll('[data-del]').forEach(btn=>{
+    btn.onclick=async()=>{
+      if(!confirm('Delete this SKU record?'))return;
+      try{await deleteRec(btn.dataset.del);await loadRecords();setMsg('suc','Deleted.');}
+      catch(e){setMsg('err','Delete failed: '+e.message);}
+    };
+  });
+
+  // Vendor expand
+  document.querySelectorAll('[data-vnd]').forEach(el=>{
+    el.onclick=()=>{const n=el.dataset.vnd;expanded[n]=!expanded[n];render();};
+  });
+
+  // Export
+  const ea=document.getElementById('exp-all'),eu=document.getElementById('exp-unpushed'),ma=document.getElementById('mark-all');
+  if(ea)ea.onclick=()=>exportCSV('all');
+  if(eu)eu.onclick=()=>exportCSV('unpushed');
+  if(ma)ma.onclick=async()=>{
+    if(!confirm('Mark all unpushed records as pushed to NetSuite?'))return;
+    const up=records.filter(r=>!f(r,'NS Pushed'));
+    try{for(const r of up)await updateRec(r.id,{'NS Pushed':true});await loadRecords();setMsg('suc','All marked as pushed.');}
+    catch(e){setMsg('err',e.message);}
+  };
+  document.querySelectorAll('[data-push]').forEach(btn=>{
+    btn.onclick=async()=>{
+      try{await updateRec(btn.dataset.push,{'NS Pushed':true});await loadRecords();setMsg('suc','Marked as pushed.');}
+      catch(e){setMsg('err',e.message);}
+    };
+  });
+}
+
+loadRecords();
+</script>
+</body>
+</html>
